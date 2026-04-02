@@ -1,1 +1,1 @@
-# Chess_Bot
+Acesta este un joc de sah simplu dezvoltat în C++ folosind biblioteca SFML pentru interfata grafica. Proiectul include un bot bazat pe algoritmul Minimax cu taiere Alpha-Beta. Prezinta un meniu in care in setari se pot alege texturile pentru piese, botul poate recunoaste anumite mutari de manual dintr-un fisier text daca se regaseste acea pozitie, iar daca nu gaseste atunci decurge la algoritmul minmax pentru urmatoarea mutare.  
