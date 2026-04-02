@@ -19,7 +19,7 @@ using namespace sf;
 
 vector<shared_ptr<Piesa>> tabla(64);
 vector<int> mutari_legale;
-
+string set_texturi = "textura_electronica";
 
 
 struct Pozitii {
@@ -98,7 +98,14 @@ int pozToIndex(Vector2f poz) {
     return row * 8 + col;
 }
 
+string indexInNotatie(int index) {
+    if (index < 0 || index > 63) return "??";
 
+    char coloana = 'a' + (index % 8);
+    int rand = 8 - (index / 8);
+
+    return string(1, coloana) + to_string(rand);
+}
 
 class TablaSah {
 private:
@@ -276,8 +283,7 @@ public:
 
     void mutareBot() {
         int bestScor = 10000;
-        int bestMutare = -1;
-        int mutareAleasa = -1;
+        vector<pair<int, int>> mutariEchivalente; // Salvăm perechi {de_la, la}
 
         for (int i = 0; i < 64; i++) {
             if (tabla[i] && tabla[i]->getCuloare() == "negru") {
@@ -285,22 +291,32 @@ public:
                 for (int mutare : mutariPosibile) {
                     Mutare m = aplicaMutare(i, mutare);
                     int scor = minimax(2, true, -10000, 10000);
+
                     if (scor < bestScor) {
                         bestScor = scor;
-                        bestMutare = i;
-                        mutareAleasa = mutare;
+                        mutariEchivalente.clear(); // Am găsit un scor mai bun, ștergem mutările vechi
+                        mutariEchivalente.push_back({i, mutare});
+                    }
+                    else if (scor == bestScor) {
+                        mutariEchivalente.push_back({i, mutare}); // Scor egal, o adăugăm la listă
                     }
                     undoMutare(m);
                 }
             }
         }
 
-        if (mutareAleasa != -1) {
-            cout << "Botul muta de la " << bestMutare << " la " << mutareAleasa << endl;
-            aplicaMutare(bestMutare, mutareAleasa);
+        if (!mutariEchivalente.empty()) {
+            // Alegem o mutare random din cele mai bune găsite
+            srand(time(0));
+            int r = rand() % mutariEchivalente.size();
+            int deLa = mutariEchivalente[r].first;
+            int la = mutariEchivalente[r].second;
+
+            cout << "Botul a ales random din " << mutariEchivalente.size() << " mutari optime." << endl;
+            cout << "Botul muta: " << indexInNotatie(deLa) << " -> " << indexInNotatie(la) << endl;
+            aplicaMutare(deLa, la);
         }
-    }
-};
+    }};
 
 
 
@@ -310,11 +326,11 @@ void GameLoop(RenderWindow& window) {
     Texture texPionAlb, texPionNegru, texTuraAlba, texTuraNeagra, texNebunuAlb, texNebunuNegru, texCalNegru, texCalAlb, texReginaAlba, texReginaNeagra, texRegeAlb, texRegeNegru;
 
     std::vector<std::string> possible_paths;
-    possible_paths.push_back("../assets/");
+    possible_paths.push_back("../assets/" + set_texturi + "/");
     possible_paths.push_back("assets/");
 
     for (std::string possible_path : possible_paths) {
-        if (false == texTabla.loadFromFile(possible_path + "tabla_de_sah.png")) continue;
+        if (false == texTabla.loadFromFile("../assets/tabla_de_sah.png")) continue;
         if (false == texPionAlb.loadFromFile(possible_path + "pion_alb.png")) continue;
         if (false == texPionNegru.loadFromFile(possible_path + "pion_negru.png")) continue;
         if (false == texTuraAlba.loadFromFile(possible_path + "tura_alba.png")) continue;
@@ -427,6 +443,14 @@ void GameLoop(RenderWindow& window) {
                         tabla[index_selectat] = nullptr;
                         tabla[newIndex] = piesa_selectata;
 
+                        if (piesa_selectata->getTip() == "pion" && newIndex / 8 == 0) {
+                            float x = (newIndex % 8) * 80.f;
+                            float y = (newIndex / 8) * 80.f;
+
+                            // ORDINE CORECTĂ: Textură, Poziție, Culoare
+                            tabla[newIndex] = make_shared<Regina>(texReginaAlba, Vector2f(x, y), "alb");
+                        }
+
                         piesa_selectata->setPosition({finalX, finalY});
                         esteJucatorulAlb = false;
                     }
@@ -457,7 +481,19 @@ void GameLoop(RenderWindow& window) {
         if (!esteJucatorulAlb) {
             string copie_tabla;
             copie_tabla = Transformare_tabla_string(tabla);
-            cout << copie_tabla << " " << copie_tabla.length() << endl;
+            int contor = 8;
+            for (int i = 0; i < 64; i++) {
+                if (contor == 0) {
+                    contor = 7;
+                    cout << endl;
+                    cout << copie_tabla[i];
+                }
+                else {
+                    contor--;
+                    cout << copie_tabla[i];
+                }
+            }
+            cout << endl;
             if (auto it  = book_moves.find(copie_tabla); it != book_moves.end()) {
                 tablaSah.aplicaMutare(it->second.poz_initiala, it->second.poz_finala);
             }
@@ -474,10 +510,167 @@ void GameLoop(RenderWindow& window) {
 }
 
 
+void setari(RenderWindow& window) {
+    Font font;
+
+    Texture TexturaDeSetari;
+
+
+    if(!TexturaDeSetari.loadFromFile("../assets/fundal_setari.png")) {
+        return;
+    }
+
+    Sprite SpriteDeSetari;
+    SpriteDeSetari.setTexture(TexturaDeSetari);
+    Vector2u size = TexturaDeSetari.getSize();
+    SpriteDeSetari.setScale(640.f / size.x, 640.f / size.y);
+    SpriteDeSetari.setPosition(0.f, 0.f);
+
+    if (!font.loadFromFile("../assets/FontulMeu.otf")) {
+        cerr << "Nu s-a putut incarca fontul!" << endl;
+        return;
+    }
+    //creez cele 3 optiuni in meniu
+    const int NUM_OPTIONS = 4;
+    Text menu[NUM_OPTIONS];
+    string options[] = { "Textura normala", "Textura electronica", "Texura minecraft", "Inapoi"};
+
+    for (int i = 0; i < NUM_OPTIONS; ++i) {
+        menu[i].setFont(font);
+        menu[i].setString(options[i]);
+        menu[i].setCharacterSize(50);
+        if (i != 3) {
+            menu[i].setPosition(200, 50 + i * 100);
+            menu[i].setFillColor(Color::White);
+        }
+        else {
+            menu[i].setPosition(50, 550);
+            menu[i].setFillColor(Color::White);
+        }
+
+    }
+
+
+    while (window.isOpen()) {
+        Event event;
+        Vector2i mousePos = Mouse::getPosition(window);
+
+        for (int i = 0; i < NUM_OPTIONS; ++i) {
+            if (menu[i].getGlobalBounds().contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y))) {
+                menu[i].setFillColor(Color::Red);
+                //daca apas incepe jocul incepe primul nivel, daca apas setari nu se intampla nimic momentan si daca apas iesire jocul se inchide
+                if (event.type == Event::MouseButtonPressed && event.mouseButton.button == Mouse::Left) {
+                    if(i == 0) {
+                        cout << "Textura normala" << endl;
+                        set_texturi = "textura_normala";
+                    }
+                    else if(i == 1) {
+                        cout << "Textura electronica" << endl;
+                        set_texturi = "textura_electronica";
+                    }
+                    else if(i == 2) {
+                        cout << "Texura minecraft" << endl;
+                        set_texturi = "textura_minecraft";
+                    }
+                    else if(i == 3) {
+                        return;
+                    }
+                }
+
+            } else {
+                menu[i].setFillColor(Color::White);
+            }
+        }
+
+        window.clear();
+        window.draw(SpriteDeSetari);
+        for (int i = 0; i < NUM_OPTIONS; ++i) {
+            window.draw(menu[i]);
+        }
+        window.display();
+
+        while (window.pollEvent(event)) {
+            if (event.type == Event::Closed)
+                window.close();
+        }
+    }
+}
+
+
 
 int main() {
     Mutari_Manual();
     RenderWindow window(VideoMode(640, 640), "Sah SFML");
+
+    Font font;
+
+    Texture TexturaDeFundal;
+
+    if(!TexturaDeFundal.loadFromFile("../assets/meniu.png")) {
+        return -1;
+    }
+    //setez fundalul jocului
+    Sprite SpriteDeFundal;
+    SpriteDeFundal.setTexture(TexturaDeFundal);
+    SpriteDeFundal.setPosition(450.f, 5.f);
+    SpriteDeFundal.setScale(Vector2(2.f, 2.f));
+
+    if (!font.loadFromFile("../assets/FontulMeu.otf")) {
+        cerr << "Nu s-a putut incarca fontul!" << endl;
+        return -1;
+    }
+    //creez cele 3 optiuni in meniu
+    const int NUM_OPTIONS = 3;
+    Text menu[NUM_OPTIONS];
+    string options[] = { "Start Joc", "Setari", "Iesire" };
+
+    for (int i = 0; i < NUM_OPTIONS; ++i) {
+        menu[i].setFont(font);
+        menu[i].setString(options[i]);
+        menu[i].setCharacterSize(100);
+        menu[i].setPosition(200, 50 + i * 200);
+        menu[i].setFillColor(Color::White);
+    }
+
+
+    while (window.isOpen()) {
+        Event event;
+        Vector2i mousePos = Mouse::getPosition(window);
+
+        for (int i = 0; i < NUM_OPTIONS; ++i) {
+            if (menu[i].getGlobalBounds().contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y))) {
+                menu[i].setFillColor(Color::Red);
+                //daca apas incepe jocul incepe primul nivel, daca apas setari nu se intampla nimic momentan si daca apas iesire jocul se inchide
+                if (event.type == Event::MouseButtonPressed && event.mouseButton.button == Mouse::Left) {
+                    if(i == 0) {
+                        cout << "incepe jocul" << endl;
+                        GameLoop(window);
+                    }
+                    else if(i == 1) {
+                        cout << "setari" << endl;
+                        setari(window);
+                    }
+                    else if(i == 2) {
+                        window.close();
+                    }
+                }
+
+            } else {
+                menu[i].setFillColor(Color::White);
+            }
+        }
+
+        while (window.pollEvent(event)) {
+            if (event.type == Event::Closed)
+                window.close();
+        }
+
+        window.clear();
+        window.draw(SpriteDeFundal);
+        for (int i = 0; i < NUM_OPTIONS; ++i)
+            window.draw(menu[i]);
+        window.display();
+    }
 
     GameLoop(window);
 
